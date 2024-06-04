@@ -64,8 +64,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     IEntropy public entropy;
     address public provider;
-    mapping(uint64 => CacheData) private randomGeneratorMap;
-    mapping(address => uint8[24]) private teamCardMap;
+    mapping(uint64 => CacheData) private _randomGeneratorMap;
+    mapping(address => uint8[24]) private _teamCardMap;
 
     uint8 public winner;
     bool public frozenBonusFlag;
@@ -102,16 +102,16 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     event GenerateResult(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber);
 
     modifier onlyWhileSale {
-        if (hasRole(GOVERNOR_ROLE, msg.sender)) {
-            // The GOVERNOR_ROLE role can shatter the TeamCardNFT two days in advance to establish the liquidity pool
-            require(block.number >= saleStartBlock-86400 && block.number < saleFinishBlock, "EuroCup: not in sale");
-        } else {
-            require(block.number >= saleStartBlock && block.number < saleFinishBlock, "EuroCup: not in sale");
-        }        
+        require(block.number >= saleStartBlock && block.number < saleFinishBlock, "EuroCup: not in sale");
         _;
     }
     modifier onlyWhilePlaying {
-        require(block.number >= playStartBlock && block.number < playFinishBlock, "EuroCup: not in play");
+        if (hasRole(GOVERNOR_ROLE, msg.sender)) {
+            // The GOVERNOR_ROLE role can shatter the TeamCardNFT two days in advance to establish the liquidity pool
+            require(block.number >= playStartBlock-86400 && block.number < playFinishBlock, "EuroCup: not in play");
+        } else {
+            require(block.number >= playStartBlock && block.number < playFinishBlock, "EuroCup: not in play");
+        }
         _;
     }
     modifier onlyWhilePublicPeriod {
@@ -120,6 +120,14 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     }
     modifier onlyWhilePlayFinished {
         require(block.number >= playFinishBlock, "EuroCup: play not finished");
+        _;
+    }
+    modifier onlySelfAddWhiteList {
+        require(block.number < saleFinishBlock, "EuroCup: Self-service whitelist addition has ended");
+        _;
+    }
+    modifier onlyEntropyCallback() {
+        require(msg.sender == provider, "Unauthorized Entropy callback");
         _;
     }
 
@@ -204,18 +212,19 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint128 requestFee = entropy.getFee(provider);
         if (msg.value < requestFee) revert("not enough fees");
         uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, userRandomNumber);
-        randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount,false);
+        require(sequenceNumber > 0, "Invalid sequence number");
+        _randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount,false);
         emit Generated(sequenceNumber);
     }
 
     // Open blind box
     function openBlindBox() external nonReentrant{
-        require(teamCardMap[msg.sender].length > 0, "The number of packs must be greater than 0");
+        require(_teamCardMap[msg.sender].length > 0, "The number of packs must be greater than 0");
 
         // Open the blind box, generate the TeamCard based on the VRF
         uint teamCardsCount = 0;
         for (uint8 i=0; i<24; i++) {
-            teamCardsCount += teamCardMap[msg.sender][i];
+            teamCardsCount += _teamCardMap[msg.sender][i];
         }
 
         uint bTokenAmount = bToken.balanceOf(msg.sender);
@@ -223,17 +232,18 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
 
         for (uint8 i=0; i<24; i++) {
-            for (uint j=0; j<teamCardMap[msg.sender][i];j++) {
+            for (uint j=0; j<_teamCardMap[msg.sender][i];j++) {
                 tToken.mint(msg.sender,i);
             }
         }  
 
-        delete teamCardMap[msg.sender];
+        delete _teamCardMap[msg.sender];
         bToken.burn(msg.sender,bTokenAmount);
     }
 
     // Synthetic blind boxes
     function synthetic(uint amount,bytes32 userRandomNumber) external payable nonReentrant onlyWhilePlaying{
+        require(block.number > playStartBlock, "the PlayStartBlock must larger than block.num");
         // Synthetic blind boxes, merging one blind box requires an additional 60 UEFA per hour
         uint price = 50000 + (block.number - playStartBlock) / 1800 * 60 ;
         vToken.burn(msg.sender,amount * price * 1e18);
@@ -263,6 +273,15 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // Add to whitelist
     function addWhiteList(address userAddress) external onlyRole(GOVERNOR_ROLE){
         whiteList[userAddress] = true;
+    }
+
+    // Self add to whitelist
+    function selfAddWhiteList(bytes32 referralCode) external onlySelfAddWhiteList{
+        address referralPersonAddress = referralCodeToAddress[referralCode];
+        require(referralPersonAddress!=msg.sender,"EuroCup: Incorrect referralCode");
+        if(referralPersonAddress!=address(0) && whiteList[referralPersonAddress]){
+            whiteList[msg.sender] = true;
+        }
     }
 
     // The competition ends, receive the prize
@@ -336,29 +355,28 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     }
 
     // This function is called by the Entropy contract, Callback function to handle the generated random number
-    function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override {
-        require(msg.sender == address(entropy), "VRF Caller is not trusted Entropy contract");
-        CacheData memory cacheData = randomGeneratorMap[sequenceNumber];
-        require(cacheData.isGenerated == false, "This data has already been generated");
+    function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override onlyEntropyCallback{
+        CacheData memory cacheData = _randomGeneratorMap[sequenceNumber];
+        require(cacheData.sender!=address(0) && cacheData.isGenerated==false, "No data available to process");
 
-        if (teamCardMap[msg.sender].length == 0) {
+        if (_teamCardMap[cacheData.sender].length == 0) {
             // Mapping does not exist, initialize it
-            teamCardMap[msg.sender] = [uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)];
+            _teamCardMap[cacheData.sender] = [uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)];
         }
 
         for (uint i = 0; i < 5 * cacheData.amount; i++) {
             uint extraRandom = uint(keccak256(abi.encodePacked(block.timestamp, i)));
             uint randomTeam = uint(keccak256(abi.encodePacked(extraRandom, randomNumber))) % 24;
-            teamCardMap[msg.sender][randomTeam]++;
+            _teamCardMap[cacheData.sender][randomTeam]++;
         }
-        randomGeneratorMap[sequenceNumber].isGenerated = true;
+        _randomGeneratorMap[sequenceNumber].isGenerated = true;
         emit Open(cacheData.sender, cacheData.amount);
         emit GenerateResult(sequenceNumber, _providerAddress, randomNumber);
     }
 
     // Check if there are any unopened blind boxes that have obtained VRF
     function haveTeamCards() external view returns(bool){
-        if (teamCardMap[msg.sender].length == 0) {
+        if (_teamCardMap[msg.sender].length == 0) {
             return false;
         }
 
@@ -366,7 +384,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint bTokenAmount = bToken.balanceOf(msg.sender);
         uint teamCardsCount = 0;
         for (uint i=0; i<24; i++) {
-            teamCardsCount += teamCardMap[msg.sender][i];
+            teamCardsCount += _teamCardMap[msg.sender][i];
         }
         
         if (teamCardsCount == bTokenAmount*5) {
