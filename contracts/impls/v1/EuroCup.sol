@@ -8,8 +8,6 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@pythnetwork/entropy-sdk-solidity/IEntropy.sol";
 import "@pythnetwork/entropy-sdk-solidity/IEntropyConsumer.sol";
-import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "../../interfaces/v1/IERC721Intact.sol";
 import "../../interfaces/v1/IERC20Intact.sol";
 import "../../interfaces/v1/IBlast.sol";
@@ -45,6 +43,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     struct CacheData{
         address sender;
         uint amount;
+        bool isGenerated;
     }
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
@@ -66,7 +65,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     IEntropy public entropy;
     address public provider;
     mapping(uint64 => CacheData) private randomGeneratorMap;
-    mapping(address => uint8[]) private teamCardMap;
+    mapping(address => uint8[24]) private teamCardMap;
 
     uint8 public winner;
     bool public frozenBonusFlag;
@@ -87,8 +86,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // Alphabet used to generate referral codes (as bytes array)
     bytes private constant ALPHABET = "ABCDEFGHIJKLMNPQRSTUVWXYZ";
 
-    ISwapRouter public swapRouter;
-
     bool public getPoolFundFlag;
 
     // Event triggered when a new referral code is created
@@ -98,6 +95,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     event Synthetic(address indexed account, uint indexed amount,uint indexed price);
     event Shatter(address indexed account, uint[] indexed tokenIds);
     event GetBonus(address indexed account, uint indexed amount);
+    event GetPoolUEFA(address indexed account, uint indexed amount);
     event GetPoolFund(address indexed account, uint indexed amount);
     event GetCommission(address indexed account, uint indexed amount);
     event Generated(uint64 sequenceNumber);
@@ -141,7 +139,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint paraPublishStartBlock;
         uint paraPlayFinishBlock;
         address paraEntropy;
-        ISwapRouter paraSwapRouter;
         address paraRegulatoryAddress;
         address paraBlastPointsAddress;
     }
@@ -165,7 +162,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         frozenBonusFlag = false;
         frozenCommissionFlag = false;
         counter = 1;
-        swapRouter = params.paraSwapRouter;
         regulatoryAddress = params.paraRegulatoryAddress;
         blastPointsAddress = params.paraBlastPointsAddress;
         _grantRole(GOVERNOR_ROLE, regulatoryAddress);
@@ -208,22 +204,29 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint128 requestFee = entropy.getFee(provider);
         if (msg.value < requestFee) revert("not enough fees");
         uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, userRandomNumber);
-        randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount);
+        randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount,false);
         emit Generated(sequenceNumber);
     }
 
     // Open blind box
     function openBlindBox() external nonReentrant{
+        require(teamCardMap[msg.sender].length > 0, "The number of packs must be greater than 0");
+
         // Open the blind box, generate the TeamCard based on the VRF
-        uint8[] memory teamCards = teamCardMap[msg.sender];
-        uint teamCardsCount = teamCards.length;
+        uint teamCardsCount = 0;
+        for (uint8 i=0; i<24; i++) {
+            teamCardsCount += teamCardMap[msg.sender][i];
+        }
+
         uint bTokenAmount = bToken.balanceOf(msg.sender);
         require(teamCardsCount > 0, "The number of packs must be greater than 0");
-        require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet.");        
+        require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
 
-        for(uint i=0;i<teamCards.length;i++){
-            tToken.mint(msg.sender,teamCards[i]);
-        }
+        for (uint8 i=0; i<24; i++) {
+            for (uint j=0; j<teamCardMap[msg.sender][i];j++) {
+                tToken.mint(msg.sender,i);
+            }
+        }  
 
         delete teamCardMap[msg.sender];
         bToken.burn(msg.sender,bTokenAmount);
@@ -284,6 +287,13 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         emit GetBonus(msg.sender,award);
     }
 
+    // Get the UEFA from the prize pool, exchange it for USDB in the trading market, and then deposit it back into the prize pool
+    function getPoolUEFA() external nonReentrant onlyRole(GOVERNOR_ROLE){
+        uint totalUEFA = vToken.balanceOf(address(this));
+        vToken.transfer(msg.sender,totalUEFA);
+        emit GetPoolUEFA(msg.sender,totalUEFA);
+    }
+
     // A one-time extraction of 10% of the USDB will be allocated to the liquidity pool
     function getPoolFund() external nonReentrant onlyWhilePlaying onlyRole(GOVERNOR_ROLE){
         if(!getPoolFundFlag){
@@ -328,25 +338,38 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // This function is called by the Entropy contract, Callback function to handle the generated random number
     function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override {
         require(msg.sender == address(entropy), "VRF Caller is not trusted Entropy contract");
-        
-        CacheData storage cacheData = randomGeneratorMap[sequenceNumber];
-        uint8 num = uint8(type(Team).max);
+        CacheData memory cacheData = randomGeneratorMap[sequenceNumber];
+        require(cacheData.isGenerated == false, "This data has already been generated");
+
+        if (teamCardMap[msg.sender].length == 0) {
+            // Mapping does not exist, initialize it
+            teamCardMap[msg.sender] = [uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)];
+        }
+
         for (uint i = 0; i < 5 * cacheData.amount; i++) {
             uint extraRandom = uint(keccak256(abi.encodePacked(block.timestamp, i)));
-            uint random = uint(keccak256(abi.encodePacked(extraRandom,randomNumber))) % num;
-            require(random <= 255, "random is too large for uint8");
-            teamCardMap[cacheData.sender].push(uint8(random));
+            uint randomTeam = uint(keccak256(abi.encodePacked(extraRandom, randomNumber))) % 24;
+            teamCardMap[msg.sender][randomTeam]++;
         }
-        emit Open(cacheData.sender,cacheData.amount);
-        emit GenerateResult(sequenceNumber, _providerAddress,randomNumber);
+        randomGeneratorMap[sequenceNumber].isGenerated = true;
+        emit Open(cacheData.sender, cacheData.amount);
+        emit GenerateResult(sequenceNumber, _providerAddress, randomNumber);
     }
 
     // Check if there are any unopened blind boxes that have obtained VRF
     function haveTeamCards() external view returns(bool){
+        if (teamCardMap[msg.sender].length == 0) {
+            return false;
+        }
+
         bool bolReturn = false;
         uint bTokenAmount = bToken.balanceOf(msg.sender);
-        uint teamCardMapCount = teamCardMap[msg.sender].length;
-        if (teamCardMapCount>0 &&  teamCardMapCount == bTokenAmount*5) {
+        uint teamCardsCount = 0;
+        for (uint i=0; i<24; i++) {
+            teamCardsCount += teamCardMap[msg.sender][i];
+        }
+        
+        if (teamCardsCount == bTokenAmount*5) {
             bolReturn = true;
         }
         return bolReturn;
@@ -396,29 +419,4 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         }
         return bytes32(code);
     }
-
-    /**
-     * @notice Swaps an exact input amount of tokens for a minimum output amount.
-     * @dev Executes a swap on Uniswap V3 with specified parameters. The caller must have enough vTokens approved and available.
-     * @param amountIn The amount of input tokens to be swapped.
-     * @param amountOutMin The minimum amount of output tokens to be received.
-     * @return amountOut The actual amount of output tokens received.
-     */
-    function swapExactInputSingle(uint256 amountIn,uint256 amountOutMin) external nonReentrant onlyWhilePlaying onlyRole(GOVERNOR_ROLE) returns (uint256 amountOut) {
-        TransferHelper.safeTransferFrom(address(vToken), msg.sender, address(this), amountIn);
-        TransferHelper.safeApprove(address(vToken), address(swapRouter), amountIn);
-        ISwapRouter.ExactInputSingleParams memory params =
-        ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(vToken),
-            tokenOut: address(stableCoin),
-            fee: 3000,
-            recipient: address(this),
-            deadline: block.timestamp + 60,
-            amountIn: amountIn,
-            amountOutMinimum: amountOutMin,
-            sqrtPriceLimitX96: 0
-        });
-        amountOut = swapRouter.exactInputSingle(params);
-    }
-
 }

@@ -9,12 +9,12 @@ import {
   TeamCardNFT, TeamCardNFT__factory,
   VoucherToken, VoucherToken__factory
 } from "../../types";
-import { USDB_ADDRESS, SWAP_ROUTER, BLAST_ENTROPY_ADDRESS } from "../../utils/constants";
-const SALE_START_BLOCK = 6330000;     //Need to change to 4259892, 2024-06-02 12:00:00 UTC
-const PLAY_START_BLOCK = 6330000;     //Need to change to 4605492, 2024-06-10 12:00:00 UTC
-const SALE_FINISH_BLOCK = 6500000;    //Need to change to 5433492, 2024-06-29 16:00:00 UTC
-const PUBLISH_START_BLOCK = 6330000;  //Need to change to 6081492, 2024-07-15 00:00:00 UTC
-const PLAY_FINISH_BLOCK = 6500000;    //Need to change to 6086892, 2024-07-14 19:00:00 UTC
+import { USDB_ADDRESS, BLAST_ENTROPY_ADDRESS } from "../../utils/constants";
+const SALE_START_BLOCK = 6408000;     //Need to change to 4389492, 2024-06-05 12:00:00 UTC
+const PLAY_START_BLOCK = 6408000;     //Need to change to 4605492, 2024-06-10 12:00:00 UTC
+const SALE_FINISH_BLOCK = 8500000;    //Need to change to 5433492, 2024-06-29 16:00:00 UTC
+const PLAY_FINISH_BLOCK = 8500000;    //Need to change to 6086892, 2024-07-14 19:00:00 UTC
+const PUBLISH_START_BLOCK = 6408000;  //Need to change to 6081492, 2024-07-15 00:00:00 UTC
 const REGULATORY_ADDRESS = "0xbC748b2bE638FE252DcBEf668D039cFF60f36014";
 const BLAST_POINTS_ADDRESS = "0xbC748b2bE638FE252DcBEf668D039cFF60f36014";
 
@@ -62,8 +62,7 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     paraPublishStartBlock: PUBLISH_START_BLOCK,
     paraPlayFinishBlock: PLAY_FINISH_BLOCK,
     paraEntropy: BLAST_ENTROPY_ADDRESS,
-    paraSwapRouter: SWAP_ROUTER,
-    paraRegulatoryAddress: REGULATORY_ADDRESS,
+    paraRegulatoryAddress: REGULATORY_ADDRESS,   //GOVERNOR_ROLE
     paraBlastPointsAddress: BLAST_POINTS_ADDRESS
   };
 

@@ -133,14 +133,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IEntropyConsumer__factory>;
     getContractFactory(
-      name: "IUniswapV3SwapCallback",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IUniswapV3SwapCallback__factory>;
-    getContractFactory(
-      name: "ISwapRouter",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.ISwapRouter__factory>;
-    getContractFactory(
       name: "BlindBoxToken",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.BlindBoxToken__factory>;
@@ -323,16 +315,6 @@ declare module "hardhat/types/runtime" {
       address: string,
       signer?: ethers.Signer
     ): Promise<Contracts.IEntropyConsumer>;
-    getContractAt(
-      name: "IUniswapV3SwapCallback",
-      address: string,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IUniswapV3SwapCallback>;
-    getContractAt(
-      name: "ISwapRouter",
-      address: string,
-      signer?: ethers.Signer
-    ): Promise<Contracts.ISwapRouter>;
     getContractAt(
       name: "BlindBoxToken",
       address: string,

@@ -40,7 +40,6 @@ export declare namespace EuroCup {
     paraPublishStartBlock: PromiseOrValue<BigNumberish>;
     paraPlayFinishBlock: PromiseOrValue<BigNumberish>;
     paraEntropy: PromiseOrValue<string>;
-    paraSwapRouter: PromiseOrValue<string>;
     paraRegulatoryAddress: PromiseOrValue<string>;
     paraBlastPointsAddress: PromiseOrValue<string>;
   };
@@ -57,7 +56,6 @@ export declare namespace EuroCup {
     BigNumber,
     string,
     string,
-    string,
     string
   ] & {
     paraTToken: string;
@@ -70,7 +68,6 @@ export declare namespace EuroCup {
     paraPublishStartBlock: BigNumber;
     paraPlayFinishBlock: BigNumber;
     paraEntropy: string;
-    paraSwapRouter: string;
     paraRegulatoryAddress: string;
     paraBlastPointsAddress: string;
   };
@@ -93,13 +90,14 @@ export interface EuroCupInterface extends utils.Interface {
     "getCommission()": FunctionFragment;
     "getPoolFund()": FunctionFragment;
     "getPoolFundFlag()": FunctionFragment;
+    "getPoolUEFA()": FunctionFragment;
     "getRoleAdmin(bytes32)": FunctionFragment;
     "getRoleMember(bytes32,uint256)": FunctionFragment;
     "getRoleMemberCount(bytes32)": FunctionFragment;
     "grantRole(bytes32,address)": FunctionFragment;
     "hasRole(bytes32,address)": FunctionFragment;
     "haveTeamCards()": FunctionFragment;
-    "initialize((address,address,address,address,uint256,uint256,uint256,uint256,uint256,address,address,address,address))": FunctionFragment;
+    "initialize((address,address,address,address,uint256,uint256,uint256,uint256,uint256,address,address,address))": FunctionFragment;
     "openBlindBox()": FunctionFragment;
     "pause()": FunctionFragment;
     "paused()": FunctionFragment;
@@ -116,8 +114,6 @@ export interface EuroCupInterface extends utils.Interface {
     "setWinner(uint8)": FunctionFragment;
     "shatter(uint256[])": FunctionFragment;
     "supportsInterface(bytes4)": FunctionFragment;
-    "swapExactInputSingle(uint256,uint256)": FunctionFragment;
-    "swapRouter()": FunctionFragment;
     "synthetic(uint256,bytes32)": FunctionFragment;
     "totalBonus()": FunctionFragment;
     "totalCommission()": FunctionFragment;
@@ -144,6 +140,7 @@ export interface EuroCupInterface extends utils.Interface {
       | "getCommission"
       | "getPoolFund"
       | "getPoolFundFlag"
+      | "getPoolUEFA"
       | "getRoleAdmin"
       | "getRoleMember"
       | "getRoleMemberCount"
@@ -167,8 +164,6 @@ export interface EuroCupInterface extends utils.Interface {
       | "setWinner"
       | "shatter"
       | "supportsInterface"
-      | "swapExactInputSingle"
-      | "swapRouter"
       | "synthetic"
       | "totalBonus"
       | "totalCommission"
@@ -238,6 +233,10 @@ export interface EuroCupInterface extends utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "getPoolFundFlag",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getPoolUEFA",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -324,14 +323,6 @@ export interface EuroCupInterface extends utils.Interface {
     values: [PromiseOrValue<BytesLike>]
   ): string;
   encodeFunctionData(
-    functionFragment: "swapExactInputSingle",
-    values: [PromiseOrValue<BigNumberish>, PromiseOrValue<BigNumberish>]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "swapRouter",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "synthetic",
     values: [PromiseOrValue<BigNumberish>, PromiseOrValue<BytesLike>]
   ): string;
@@ -409,6 +400,10 @@ export interface EuroCupInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "getPoolUEFA",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getRoleAdmin",
     data: BytesLike
   ): Result;
@@ -473,11 +468,6 @@ export interface EuroCupInterface extends utils.Interface {
     functionFragment: "supportsInterface",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "swapExactInputSingle",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "swapRouter", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "synthetic", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "totalBonus", data: BytesLike): Result;
   decodeFunctionResult(
@@ -499,6 +489,7 @@ export interface EuroCupInterface extends utils.Interface {
     "GetBonus(address,uint256)": EventFragment;
     "GetCommission(address,uint256)": EventFragment;
     "GetPoolFund(address,uint256)": EventFragment;
+    "GetPoolUEFA(address,uint256)": EventFragment;
     "Initialized(uint8)": EventFragment;
     "Open(address,uint256)": EventFragment;
     "Paused(address)": EventFragment;
@@ -517,6 +508,7 @@ export interface EuroCupInterface extends utils.Interface {
   getEvent(nameOrSignatureOrTopic: "GetBonus"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "GetCommission"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "GetPoolFund"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "GetPoolUEFA"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Initialized"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Open"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Paused"): EventFragment;
@@ -592,6 +584,17 @@ export type GetPoolFundEvent = TypedEvent<
 >;
 
 export type GetPoolFundEventFilter = TypedEventFilter<GetPoolFundEvent>;
+
+export interface GetPoolUEFAEventObject {
+  account: string;
+  amount: BigNumber;
+}
+export type GetPoolUEFAEvent = TypedEvent<
+  [string, BigNumber],
+  GetPoolUEFAEventObject
+>;
+
+export type GetPoolUEFAEventFilter = TypedEventFilter<GetPoolUEFAEvent>;
 
 export interface InitializedEventObject {
   version: number;
@@ -775,6 +778,10 @@ export interface EuroCup extends BaseContract {
 
     getPoolFundFlag(overrides?: CallOverrides): Promise<[boolean]>;
 
+    getPoolUEFA(
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<ContractTransaction>;
+
     getRoleAdmin(
       role: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
@@ -866,14 +873,6 @@ export interface EuroCup extends BaseContract {
       overrides?: CallOverrides
     ): Promise<[boolean]>;
 
-    swapExactInputSingle(
-      amountIn: PromiseOrValue<BigNumberish>,
-      amountOutMin: PromiseOrValue<BigNumberish>,
-      overrides?: Overrides & { from?: PromiseOrValue<string> }
-    ): Promise<ContractTransaction>;
-
-    swapRouter(overrides?: CallOverrides): Promise<[string]>;
-
     synthetic(
       amount: PromiseOrValue<BigNumberish>,
       userRandomNumber: PromiseOrValue<BytesLike>,
@@ -951,6 +950,10 @@ export interface EuroCup extends BaseContract {
   ): Promise<ContractTransaction>;
 
   getPoolFundFlag(overrides?: CallOverrides): Promise<boolean>;
+
+  getPoolUEFA(
+    overrides?: Overrides & { from?: PromiseOrValue<string> }
+  ): Promise<ContractTransaction>;
 
   getRoleAdmin(
     role: PromiseOrValue<BytesLike>,
@@ -1041,14 +1044,6 @@ export interface EuroCup extends BaseContract {
     overrides?: CallOverrides
   ): Promise<boolean>;
 
-  swapExactInputSingle(
-    amountIn: PromiseOrValue<BigNumberish>,
-    amountOutMin: PromiseOrValue<BigNumberish>,
-    overrides?: Overrides & { from?: PromiseOrValue<string> }
-  ): Promise<ContractTransaction>;
-
-  swapRouter(overrides?: CallOverrides): Promise<string>;
-
   synthetic(
     amount: PromiseOrValue<BigNumberish>,
     userRandomNumber: PromiseOrValue<BytesLike>,
@@ -1118,6 +1113,8 @@ export interface EuroCup extends BaseContract {
     getPoolFund(overrides?: CallOverrides): Promise<void>;
 
     getPoolFundFlag(overrides?: CallOverrides): Promise<boolean>;
+
+    getPoolUEFA(overrides?: CallOverrides): Promise<void>;
 
     getRoleAdmin(
       role: PromiseOrValue<BytesLike>,
@@ -1206,14 +1203,6 @@ export interface EuroCup extends BaseContract {
       overrides?: CallOverrides
     ): Promise<boolean>;
 
-    swapExactInputSingle(
-      amountIn: PromiseOrValue<BigNumberish>,
-      amountOutMin: PromiseOrValue<BigNumberish>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
-
-    swapRouter(overrides?: CallOverrides): Promise<string>;
-
     synthetic(
       amount: PromiseOrValue<BigNumberish>,
       userRandomNumber: PromiseOrValue<BytesLike>,
@@ -1288,6 +1277,15 @@ export interface EuroCup extends BaseContract {
       account?: PromiseOrValue<string> | null,
       amount?: PromiseOrValue<BigNumberish> | null
     ): GetPoolFundEventFilter;
+
+    "GetPoolUEFA(address,uint256)"(
+      account?: PromiseOrValue<string> | null,
+      amount?: PromiseOrValue<BigNumberish> | null
+    ): GetPoolUEFAEventFilter;
+    GetPoolUEFA(
+      account?: PromiseOrValue<string> | null,
+      amount?: PromiseOrValue<BigNumberish> | null
+    ): GetPoolUEFAEventFilter;
 
     "Initialized(uint8)"(version?: null): InitializedEventFilter;
     Initialized(version?: null): InitializedEventFilter;
@@ -1425,6 +1423,10 @@ export interface EuroCup extends BaseContract {
 
     getPoolFundFlag(overrides?: CallOverrides): Promise<BigNumber>;
 
+    getPoolUEFA(
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<BigNumber>;
+
     getRoleAdmin(
       role: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
@@ -1516,14 +1518,6 @@ export interface EuroCup extends BaseContract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    swapExactInputSingle(
-      amountIn: PromiseOrValue<BigNumberish>,
-      amountOutMin: PromiseOrValue<BigNumberish>,
-      overrides?: Overrides & { from?: PromiseOrValue<string> }
-    ): Promise<BigNumber>;
-
-    swapRouter(overrides?: CallOverrides): Promise<BigNumber>;
-
     synthetic(
       amount: PromiseOrValue<BigNumberish>,
       userRandomNumber: PromiseOrValue<BytesLike>,
@@ -1608,6 +1602,10 @@ export interface EuroCup extends BaseContract {
     ): Promise<PopulatedTransaction>;
 
     getPoolFundFlag(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    getPoolUEFA(
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<PopulatedTransaction>;
 
     getRoleAdmin(
       role: PromiseOrValue<BytesLike>,
@@ -1699,14 +1697,6 @@ export interface EuroCup extends BaseContract {
       interfaceId: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
-
-    swapExactInputSingle(
-      amountIn: PromiseOrValue<BigNumberish>,
-      amountOutMin: PromiseOrValue<BigNumberish>,
-      overrides?: Overrides & { from?: PromiseOrValue<string> }
-    ): Promise<PopulatedTransaction>;
-
-    swapRouter(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     synthetic(
       amount: PromiseOrValue<BigNumberish>,
