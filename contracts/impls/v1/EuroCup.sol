@@ -181,6 +181,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // Buy blind box
     function buyBlindBox(uint amount,bytes32 referralCode,bytes32 userRandomNumber) external payable nonReentrant onlyWhileSale{
+        // Limit the amount value
+        require(amount > 0 && amount < 100, "Amount must be between 1 and 99"); 
         // Whitelist users have a starting price of 22 USDB, other users have a starting price of 30 USDB
         uint price = whiteList[msg.sender] ? 22 : 30;
         // For every 5000 blind boxes sold, the price increases by 2 USDB
@@ -201,6 +203,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // Asynchronous call to get VRF
     function callVRF(uint amount,bytes32 userRandomNumber) internal{
+        // Limit the amount value
+        require(amount > 0 && amount < 100, "Amount must be between 1 and 99");
         uint128 requestFee = entropy.getFee(provider);
         if (msg.value < requestFee) revert("not enough fees");
         uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, userRandomNumber);
@@ -323,10 +327,13 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // This function is called by the Entropy contract, Callback function to handle the generated random number
     function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override {
-        CacheData memory cacheData = randomGeneratorMap[sequenceNumber];
+        require(msg.sender == address(entropy), "VRF Caller is not trusted Entropy contract");
+        
+        CacheData storage cacheData = randomGeneratorMap[sequenceNumber];
         uint8 num = uint8(type(Team).max);
         for (uint i = 0; i < 5 * cacheData.amount; i++) {
-            uint random = uint(keccak256(abi.encodePacked(i,randomNumber))) % num;
+            uint extraRandom = uint(keccak256(abi.encodePacked(block.timestamp, i)));
+            uint random = uint(keccak256(abi.encodePacked(extraRandom,randomNumber))) % num;
             require(random <= 255, "random is too large for uint8");
             teamCardMap[cacheData.sender].push(uint8(random));
         }
