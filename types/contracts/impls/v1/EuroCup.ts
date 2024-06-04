@@ -111,6 +111,7 @@ export interface EuroCupInterface extends utils.Interface {
     "revokeRole(bytes32,address)": FunctionFragment;
     "saleFinishBlock()": FunctionFragment;
     "saleStartBlock()": FunctionFragment;
+    "selfAddWhiteList(bytes32)": FunctionFragment;
     "setWinner(uint8)": FunctionFragment;
     "shatter(uint256[])": FunctionFragment;
     "supportsInterface(bytes4)": FunctionFragment;
@@ -161,6 +162,7 @@ export interface EuroCupInterface extends utils.Interface {
       | "revokeRole"
       | "saleFinishBlock"
       | "saleStartBlock"
+      | "selfAddWhiteList"
       | "setWinner"
       | "shatter"
       | "supportsInterface"
@@ -309,6 +311,10 @@ export interface EuroCupInterface extends utils.Interface {
   encodeFunctionData(
     functionFragment: "saleStartBlock",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "selfAddWhiteList",
+    values: [PromiseOrValue<BytesLike>]
   ): string;
   encodeFunctionData(
     functionFragment: "setWinner",
@@ -460,6 +466,10 @@ export interface EuroCupInterface extends utils.Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "saleStartBlock",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "selfAddWhiteList",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setWinner", data: BytesLike): Result;
@@ -858,6 +868,11 @@ export interface EuroCup extends BaseContract {
 
     saleStartBlock(overrides?: CallOverrides): Promise<[BigNumber]>;
 
+    selfAddWhiteList(
+      referralCode: PromiseOrValue<BytesLike>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<ContractTransaction>;
+
     setWinner(
       winner_: PromiseOrValue<BigNumberish>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
@@ -1029,6 +1044,11 @@ export interface EuroCup extends BaseContract {
 
   saleStartBlock(overrides?: CallOverrides): Promise<BigNumber>;
 
+  selfAddWhiteList(
+    referralCode: PromiseOrValue<BytesLike>,
+    overrides?: Overrides & { from?: PromiseOrValue<string> }
+  ): Promise<ContractTransaction>;
+
   setWinner(
     winner_: PromiseOrValue<BigNumberish>,
     overrides?: Overrides & { from?: PromiseOrValue<string> }
@@ -1187,6 +1207,11 @@ export interface EuroCup extends BaseContract {
     saleFinishBlock(overrides?: CallOverrides): Promise<BigNumber>;
 
     saleStartBlock(overrides?: CallOverrides): Promise<BigNumber>;
+
+    selfAddWhiteList(
+      referralCode: PromiseOrValue<BytesLike>,
+      overrides?: CallOverrides
+    ): Promise<void>;
 
     setWinner(
       winner_: PromiseOrValue<BigNumberish>,
@@ -1503,6 +1528,11 @@ export interface EuroCup extends BaseContract {
 
     saleStartBlock(overrides?: CallOverrides): Promise<BigNumber>;
 
+    selfAddWhiteList(
+      referralCode: PromiseOrValue<BytesLike>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<BigNumber>;
+
     setWinner(
       winner_: PromiseOrValue<BigNumberish>,
       overrides?: Overrides & { from?: PromiseOrValue<string> }
@@ -1682,6 +1712,11 @@ export interface EuroCup extends BaseContract {
     saleFinishBlock(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     saleStartBlock(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    selfAddWhiteList(
+      referralCode: PromiseOrValue<BytesLike>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<PopulatedTransaction>;
 
     setWinner(
       winner_: PromiseOrValue<BigNumberish>,
