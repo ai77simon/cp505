@@ -52,7 +52,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     uint public saleFinishBlock;
     uint public publishStartBlock;
     uint public playFinishBlock;
-    mapping(address => bool) public whiteList;
 
     IERC721Intact internal tToken;
     IERC20Intact internal vToken;
@@ -111,7 +110,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     modifier onlyWhilePlaying {
         if (hasRole(GOVERNOR_ROLE, msg.sender)) {
             // The GOVERNOR_ROLE role can shatter the TeamCardNFT two days in advance to establish the liquidity pool
-            require(block.number >= playStartBlock-86400 && block.number < playFinishBlock, "EuroCup: not in play");
+            require(block.number >= playStartBlock-43200 && block.number < playFinishBlock, "EuroCup: not in play");
         } else {
             require(block.number >= playStartBlock && block.number < playFinishBlock, "EuroCup: not in play");
         }
@@ -123,10 +122,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     }
     modifier onlyWhilePlayFinished {
         require(block.number >= playFinishBlock, "EuroCup: play not finished");
-        _;
-    }
-    modifier onlySelfAddWhiteList {
-        require(block.number < saleFinishBlock, "EuroCup: Self-service whitelist addition has ended");
         _;
     }
 
@@ -187,16 +182,16 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     function buyBlindBox(uint amount,bytes32 referralCode,bytes32 userRandomNumber) external payable nonReentrant onlyWhileSale{
         // Limit the amount value
         require(amount > 0 && amount < 100, "Amount must be between 1 and 99"); 
-        // Whitelist users have a starting price of 22 USDB, other users have a starting price of 30 USDB
-        uint price = whiteList[msg.sender] ? 22 : 30;
+        // starting price is 30 USDB
+        uint price = 30;
         // For every 5000 blind boxes sold, the price increases by 2 USDB
         price += totalSaleBlindBox / 5000 * 2 ;
         stableCoin.transferFrom(msg.sender,address(this), amount * price * 1e18);
         address referralPersonAddress = referralCodeToAddress[referralCode];
         require(referralPersonAddress!=msg.sender,"EuroCup: Incorrect referralCode");
         if(referralPersonAddress!=address(0)){
-            // Valid referral code owners will receive a 5% commission rebate
-            stableCoin.transfer(referralPersonAddress,amount * price * 1e18 / 20);
+            // Valid referral code owners will receive a 10% commission rebate
+            stableCoin.transfer(referralPersonAddress,amount * price * 1e18 / 10);
         }
         bToken.mint(msg.sender,amount);
         totalSaleBlindBox += amount;
@@ -276,20 +271,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         // Shattering one blind box, the prize pool will receive 1000 UEFA
         vToken.mint(address(this),totalAmount * 1000 * 1e18);
         emit Shatter(msg.sender,tokenIds);
-    }
-
-    // Add to whitelist
-    function addWhiteList(address userAddress) external onlyRole(GOVERNOR_ROLE){
-        whiteList[userAddress] = true;
-    }
-
-    // Self add to whitelist
-    function selfAddWhiteList(bytes32 referralCode) external onlySelfAddWhiteList{
-        address referralPersonAddress = referralCodeToAddress[referralCode];
-        require(referralPersonAddress!=msg.sender,"EuroCup: Incorrect referralCode");
-        require(referralPersonAddress!=address(0), "EuroCup: Incorrect referralCode.");
-        require(whiteList[referralPersonAddress], "EuroCup: Incorrect referralCode..");
-        whiteList[msg.sender] = true;
     }
 
     // The competition ends, receive the prize
@@ -408,7 +389,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
      * @return The generated referral code.
      */
     function generateReferralCode() public returns (bytes32) {
-        require(whiteList[msg.sender]||tToken.balanceOf(msg.sender)>0,"EuroCup:Unsatisfied conditions");
+        require(tToken.balanceOf(msg.sender)>0,"EuroCup:Unsatisfied conditions");
         address user = msg.sender;
         require(addressToReferralCode[user] == bytes32(0), "Referral code already exists for this address");
         // Generate unique referral code
