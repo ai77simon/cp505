@@ -80,8 +80,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // Mapping from address to referral code
     mapping(address => bytes32) public addressToReferralCode;
 
-    // Counter used to generate unique referral codes
-    uint256 private counter;
+    // _Counter used to generate unique referral codes
+    uint256 private _counter;
 
     // Alphabet used to generate referral codes (as bytes array)
     bytes private constant ALPHABET = "ABCDEFGHIJKLMNPQRSTUVWXYZ";
@@ -126,10 +126,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         require(block.number < saleFinishBlock, "EuroCup: Self-service whitelist addition has ended");
         _;
     }
-    modifier onlyEntropyCallback() {
-        require(msg.sender == provider, "Unauthorized Entropy callback");
-        _;
-    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -169,7 +165,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         winner = 100;
         frozenBonusFlag = false;
         frozenCommissionFlag = false;
-        counter = 1;
+        _counter = 1;
         regulatoryAddress = params.paraRegulatoryAddress;
         blastPointsAddress = params.paraBlastPointsAddress;
         _grantRole(GOVERNOR_ROLE, regulatoryAddress);
@@ -228,7 +224,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         }
 
         uint bTokenAmount = bToken.balanceOf(msg.sender);
-        require(teamCardsCount > 0, "The number of packs must be greater than 0");
+        require(teamCardsCount > 0, "The number of pack must be greater than 0");
         require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
 
         for (uint8 i=0; i<24; i++) {
@@ -355,7 +351,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     }
 
     // This function is called by the Entropy contract, Callback function to handle the generated random number
-    function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override onlyEntropyCallback{
+    function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override{
+        // require(msg.sender == provider, "Unauthorized Entropy callback");
         CacheData memory cacheData = _randomGeneratorMap[sequenceNumber];
         require(cacheData.sender!=address(0) && cacheData.isGenerated==false, "No data available to process");
 
@@ -416,21 +413,21 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     function generateUniqueCode() internal returns (bytes32) {
         bytes32 code;
         do {
-            code = generateCode(counter, block.timestamp, msg.sender);
-            counter++;
+            code = generateCode(_counter, block.timestamp, msg.sender);
+            _counter++;
         } while (referralCodeToAddress[code] != address(0)); // Ensure referral code is unique
         return code;
     }
 
     /**
      * @notice Internal function to generate a referral code based on inputs.
-     * @param _counter The current counter value.
+     * @param _paraCounter The current counter value.
      * @param _timestamp The current block timestamp.
      * @param _sender The address of the message sender.
      * @return A generated referral code.
      */
-    function generateCode(uint256 _counter, uint256 _timestamp, address _sender) internal pure returns (bytes32) {
-        bytes32 hash = keccak256(abi.encodePacked(_counter, _timestamp, _sender));
+    function generateCode(uint256 _paraCounter, uint256 _timestamp, address _sender) internal pure returns (bytes32) {
+        bytes32 hash = keccak256(abi.encodePacked(_paraCounter, _timestamp, _sender));
         bytes memory code = new bytes(5);
         for (uint256 i = 0; i < 5; i++) {
             code[i] = ALPHABET[uint8(hash[i]) % 25];
