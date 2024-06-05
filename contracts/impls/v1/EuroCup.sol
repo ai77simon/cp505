@@ -67,6 +67,9 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     mapping(uint64 => CacheData) private _randomGeneratorMap;
     mapping(address => uint8[24]) private _teamCardMap;
 
+    // The maximum number of blind boxes that can be opened at one time
+    uint public maxOpenBlindBoxNumber;
+
     uint8 public winner;
     bool public frozenBonusFlag;
     bool public frozenCommissionFlag;
@@ -160,6 +163,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         saleFinishBlock = params.paraSaleFinishBlock;
         publishStartBlock = params.paraPublishStartBlock;
         playFinishBlock = params.paraPlayFinishBlock;
+        maxOpenBlindBoxNumber = 20;    // The maximum number of TeamCardNFT that can be generated at one time.
         entropy = IEntropy(params.paraEntropy);
         provider = entropy.getDefaultProvider();
         winner = 100;
@@ -226,15 +230,23 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint bTokenAmount = bToken.balanceOf(msg.sender);
         require(teamCardsCount > 0, "The number of pack must be greater than 0");
         require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
-
+        
+        // The maximum number of TeamCardNFT that can be generated at one time
+        uint maxGeneTCardNumber = maxOpenBlindBoxNumber * 5;
+        uint geneTCardCount = 0;
         for (uint8 i=0; i<24; i++) {
-            for (uint j=0; j<_teamCardMap[msg.sender][i];j++) {
+            uint teamCount = _teamCardMap[msg.sender][i];
+            for (uint j=0; j<teamCount && geneTCardCount<maxGeneTCardNumber; j++) {
                 tToken.mint(msg.sender,i);
+                _teamCardMap[msg.sender][i]--;
+                geneTCardCount++;
             }
-        }  
+        }
 
-        delete _teamCardMap[msg.sender];
-        bToken.burn(msg.sender,bTokenAmount);
+        if (teamCardsCount <= maxGeneTCardNumber) {
+            delete _teamCardMap[msg.sender];
+        }
+        bToken.burn(msg.sender, geneTCardCount/5);
     }
 
     // Synthetic blind boxes
@@ -275,9 +287,9 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     function selfAddWhiteList(bytes32 referralCode) external onlySelfAddWhiteList{
         address referralPersonAddress = referralCodeToAddress[referralCode];
         require(referralPersonAddress!=msg.sender,"EuroCup: Incorrect referralCode");
-        if(referralPersonAddress!=address(0) && whiteList[referralPersonAddress]){
-            whiteList[msg.sender] = true;
-        }
+        require(referralPersonAddress!=address(0), "EuroCup: Incorrect referralCode.");
+        require(whiteList[referralPersonAddress], "EuroCup: Incorrect referralCode..");
+        whiteList[msg.sender] = true;
     }
 
     // The competition ends, receive the prize
@@ -373,12 +385,13 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // Check if there are any unopened blind boxes that have obtained VRF
     function haveTeamCards() external view returns(bool){
-        if (_teamCardMap[msg.sender].length == 0) {
+        bool bolReturn = false;
+        uint bTokenAmount = bToken.balanceOf(msg.sender);
+
+        if (_teamCardMap[msg.sender].length == 0 || bTokenAmount == 0) {
             return false;
         }
 
-        bool bolReturn = false;
-        uint bTokenAmount = bToken.balanceOf(msg.sender);
         uint teamCardsCount = 0;
         for (uint i=0; i<24; i++) {
             teamCardsCount += _teamCardMap[msg.sender][i];
