@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.24;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -105,7 +105,7 @@ contract TeamCardNFT is ERC721Enumerable,AccessControlEnumerable,Pausable,IERC72
 
         // BlastPoints Testnet address: 0x2fc95838c71e76ec69ff817983BFf17c710F34E0
         // BlastPoints Mainnet address: 0x2536FE9ab3F511540F2f9e2eC2A805005C3Dd800
-        IBlastPoints(0x2fc95838c71e76ec69ff817983BFf17c710F34E0).configurePointsOperator(blastPointsAddress);
+        IBlastPoints(0x2536FE9ab3F511540F2f9e2eC2A805005C3Dd800).configurePointsOperator(blastPointsAddress);
      }
 
     // Minting a single NFT, Only the EuroCup contract can be called

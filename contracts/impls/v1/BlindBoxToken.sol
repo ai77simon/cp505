@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.24;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
@@ -59,6 +59,4 @@ contract BlindBoxToken is Context,AccessControlEnumerable,ERC20Pausable,IERC20In
     function transferFrom(address /*from*/, address /*to*/, uint256 /*amount*/) public pure override(ERC20, IERC20) returns (bool) {
         revert("BlindBoxToken: token transfer disabled");
     }
-
-
 }

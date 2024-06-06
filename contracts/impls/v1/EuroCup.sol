@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.24;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
@@ -44,6 +44,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         address sender;
         uint amount;
         bool isGenerated;
+        uint vrfTime;
     }
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
@@ -83,7 +84,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     mapping(address => bytes32) public addressToReferralCode;
 
     // _Counter used to generate unique referral codes
-    uint256 private _counter;
+    uint private _counter;
 
     // Alphabet used to generate referral codes (as bytes array)
     bytes private constant ALPHABET = "ABCDEFGHIJKLMNPQRSTUVWXYZ";
@@ -100,8 +101,10 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     event GetPoolUEFA(address indexed account, uint indexed amount);
     event GetPoolFund(address indexed account, uint indexed amount);
     event GetCommission(address indexed account, uint indexed amount);
-    event Generated(uint64 sequenceNumber);
+    event VRFGenerated(address indexed account, uint64 sequenceNumber);
     event GenerateResult(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber);
+    event BlindBoxOpened(address indexed account, uint indexed teamCardCount);
+    event VRFTimeoutHandled(address indexed account, uint64 sequenceNumber, uint64 newSequenceNumber);
 
     modifier onlyWhileSale {
         require(block.number >= saleStartBlock && block.number < saleFinishBlock, "EuroCup: not in sale");
@@ -175,7 +178,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         
         // BlastPoints Testnet address: 0x2fc95838c71e76ec69ff817983BFf17c710F34E0
         // BlastPoints Mainnet address: 0x2536FE9ab3F511540F2f9e2eC2A805005C3Dd800
-        IBlastPoints(0x2fc95838c71e76ec69ff817983BFf17c710F34E0).configurePointsOperator(blastPointsAddress);
+        IBlastPoints(0x2536FE9ab3F511540F2f9e2eC2A805005C3Dd800).configurePointsOperator(blastPointsAddress);
    }
 
     // Buy blind box
@@ -208,22 +211,40 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         if (msg.value < requestFee) revert("not enough fees");
         uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, userRandomNumber);
         require(sequenceNumber > 0, "Invalid sequence number");
-        _randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount,false);
-        emit Generated(sequenceNumber);
+        _randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount,false,block.timestamp);
+        emit VRFGenerated(msg.sender, sequenceNumber);
     }
+
+    // Handle VRF timeout more than 1 day
+    function handleVRFTimeout(uint64 sequenceNumber) external onlyRole(GOVERNOR_ROLE) {
+        CacheData storage cacheData = _randomGeneratorMap[sequenceNumber];
+        uint timeoutPeriod = 86400;   // 1 day
+        require(block.timestamp > cacheData.vrfTime + timeoutPeriod, "Request has not timed out yet");
+        require(!cacheData.isGenerated, "Random number already generated");
+
+        address user = cacheData.sender;
+        uint amount = cacheData.amount;
+        delete _randomGeneratorMap[sequenceNumber];
+
+        bytes32 newUserRandomNumber = keccak256(abi.encodePacked(sequenceNumber, block.timestamp, user));
+        uint64 newSequenceNumber = entropy.requestWithCallback{ value: entropy.getFee(provider) }(provider, newUserRandomNumber);
+        require(sequenceNumber > 0, "Invalid sequence number");
+        _randomGeneratorMap[newSequenceNumber] = CacheData(user, amount, false, block.timestamp);
+
+        emit VRFTimeoutHandled(user, sequenceNumber, newSequenceNumber);
+    }
+
 
     // Open blind box
     function openBlindBox() external nonReentrant{
-        require(_teamCardMap[msg.sender].length > 0, "The number of packs must be greater than 0");
-
         // Open the blind box, generate the TeamCard based on the VRF
         uint teamCardsCount = 0;
         for (uint8 i=0; i<24; i++) {
             teamCardsCount += _teamCardMap[msg.sender][i];
         }
-
-        uint bTokenAmount = bToken.balanceOf(msg.sender);
         require(teamCardsCount > 0, "The number of pack must be greater than 0");
+
+        uint bTokenAmount = bToken.balanceOf(msg.sender);        
         require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
         
         // The maximum number of TeamCardNFT that can be generated at one time
@@ -232,7 +253,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         for (uint8 i=0; i<24; i++) {
             uint teamCount = _teamCardMap[msg.sender][i];
             for (uint j=0; j<teamCount && geneTCardCount<maxGeneTCardNumber; j++) {
-                tToken.mint(msg.sender,i);
+                tToken.mint(msg.sender, i);
                 _teamCardMap[msg.sender][i]--;
                 geneTCardCount++;
             }
@@ -241,7 +262,10 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         if (teamCardsCount <= maxGeneTCardNumber) {
             delete _teamCardMap[msg.sender];
         }
+
         bToken.burn(msg.sender, geneTCardCount/5);
+
+        emit BlindBoxOpened(msg.sender, geneTCardCount);
     }
 
     // Synthetic blind boxes
@@ -345,7 +369,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // This function is called by the Entropy contract, Callback function to handle the generated random number
     function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override{
-        // require(msg.sender == provider, "Unauthorized Entropy callback");
+        require(msg.sender == provider, "Unauthorized Entropy callback");
+        require(_providerAddress == provider, "Invalid provider address");
         CacheData memory cacheData = _randomGeneratorMap[sequenceNumber];
         require(cacheData.sender!=address(0) && cacheData.isGenerated==false, "No data available to process");
 
@@ -389,7 +414,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
      * @return The generated referral code.
      */
     function generateReferralCode() public returns (bytes32) {
-        require(tToken.balanceOf(msg.sender)>0,"EuroCup:Unsatisfied conditions");
+        require(bToken.balanceOf(msg.sender)>0||tToken.balanceOf(msg.sender)>0,"EuroCup:Unsatisfied conditions");
         address user = msg.sender;
         require(addressToReferralCode[user] == bytes32(0), "Referral code already exists for this address");
         // Generate unique referral code
