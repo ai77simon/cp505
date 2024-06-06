@@ -10,12 +10,16 @@ import {
   VoucherToken, VoucherToken__factory
 } from "../../types";
 import { USDB_ADDRESS, BLAST_ENTROPY_ADDRESS, BLAST_POINTS_ADDRESS } from "../../utils/constants";
-const SALE_START_BLOCK = 6420000;     //Need to change to 4389492, 2024-06-05 12:00:00 UTC
-const PLAY_START_BLOCK = 6420000;     //Need to change to 4605492, 2024-06-10 12:00:00 UTC
-const SALE_FINISH_BLOCK = 8500000;    //Need to change to 5433492, 2024-06-29 16:00:00 UTC
-const PLAY_FINISH_BLOCK = 8500000;    //Need to change to 6086892, 2024-07-14 19:00:00 UTC
-const PUBLISH_START_BLOCK = 6420000;  //Need to change to 6081492, 2024-07-15 00:00:00 UTC
-const REGULATORY_ADDRESS = "0xbC748b2bE638FE252DcBEf668D039cFF60f36014";      //GOVERNOR_ROLE
+const SALE_START_BLOCK = 4432692;     //2024-06-06 12:00:00 UTC
+const PLAY_START_BLOCK = 4778292;     //2024-06-14 12:00:00 UTC
+const SALE_FINISH_BLOCK = 5167092;    //2024-06-23 12:00:00 UTC
+const PLAY_FINISH_BLOCK = 6103092;    //2024-07-15 04:00:00 UTC
+const PUBLISH_START_BLOCK = 6160692;  //2024-07-16 12:00:00 UTC
+const REGULATORY_ADDRESS = "0xaBA6AaA21Df8958eb6a440398a755bAF0963a02F";      //GOVERNOR_ROLE
+
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const filePath = hre.config.paths.deployments+"\\"+hre.network.name;
@@ -29,24 +33,36 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   let euroCup: EuroCup;
   let MINTER_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("MINTER_ROLE"));
   let BURNER_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("BURNER_ROLE"));
+
+  await delay(2000); // Delay 2 seconds
+
   //Depoly VoucherToken contract
   const voucherTokenFactory = new VoucherToken__factory(signer);
   vToken = await voucherTokenFactory.deploy();
   await vToken.deployed();
   console.log("-----vToken address=",vToken.address);
   await write(filePath,"VoucherToken.json",JSON.stringify({"address":vToken.address,"abi":VoucherToken__factory.abi}));
+
+  await delay(2000); // Delay 2 seconds
+
   //epoly TeamCardNFT contract
   const teamCardNFTFactory = new TeamCardNFT__factory(signer);
   tToken = await teamCardNFTFactory.deploy(BLAST_POINTS_ADDRESS);
   await tToken.deployed();
   console.log("-----tToken address=",tToken.address);
   await write(filePath,"TeamCardNFT.json",JSON.stringify({"address":tToken.address,"abi":TeamCardNFT__factory.abi}));
+
+  await delay(2000); // Delay 2 seconds
+
   //epoly BlindBoxToken contract
   const blindBoxTokenFactory = new BlindBoxToken__factory(signer);
   bToken = await blindBoxTokenFactory.deploy();
   await bToken.deployed();
   console.log("-----bToken address=",bToken.address);
   await write(filePath,"BlindBoxToken.json",JSON.stringify({"address":bToken.address,"abi":BlindBoxToken__factory.abi}));
+
+  await delay(2000); // Delay 2 seconds
+
   //epoly EuroCup contract
   const euroCupFactory = new EuroCup__factory(signer);
 
@@ -70,13 +86,18 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   await euroCup.deployed();
   console.log("-----euroCup address=",euroCup.address);
   await write(filePath,"EuroCup.json",JSON.stringify({"address":euroCup.address,"abi":EuroCup__factory.abi}));
+
+  await delay(2000); // Delay 2 seconds
+
   //grantRole
+  console.log("-----grantRole start-----");
   await tToken.grantRole(MINTER_ROLE,euroCup.address);
   await tToken.grantRole(BURNER_ROLE,euroCup.address);
   await vToken.grantRole(MINTER_ROLE,euroCup.address);
   await vToken.grantRole(BURNER_ROLE,euroCup.address);
   await bToken.grantRole(MINTER_ROLE,euroCup.address);
   await bToken.grantRole(BURNER_ROLE,euroCup.address);
+  console.log("-----grantRole end-----");
 };
 
 func.tags = ["EuroCupDeploy"];
