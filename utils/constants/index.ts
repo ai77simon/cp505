@@ -11,19 +11,19 @@ export const NULL_BYTES = '0x';
 // https://docs.pyth.network/entropy/contract-addresses
 // https://docs.blast.io/airdrop/mainnet-points-api/how-to-integrate-api
 
-/* Mainnet
+// Mainnet
 export const USDB_ADDRESS = "0x4300000000000000000000000000000000000003";
 export const BLAST_ENTROPY_ADDRESS = "0x5744Cbf430D99456a0A8771208b674F27f8EF0Fb";
 export const PROVIDER_ADDRESS = "0x52DeaA1c84233F7bb8C8A45baeDE41091c616506";
-export const BLAST_POINTS_ADDRESS = "0x2536FE9ab3F511540F2f9e2eC2A805005C3Dd800";
+export const BLAST_POINTS_ADDRESS = "0x364e71bB1D1B573bed7aa133329B92eE28983dF2";   //op
 
-*/
 
-/* Testnet */
+/* Testnet 
 export const USDB_ADDRESS = "0x4200000000000000000000000000000000000022";
 export const BLAST_ENTROPY_ADDRESS = "0x98046Bd286715D3B0BC227Dd7a956b83D8978603";
 export const PROVIDER_ADDRESS = "0x6CC14824Ea2918f5De5C2f75A9Da968ad4BD6344";
-export const BLAST_POINTS_ADDRESS = "0x2fc95838c71e76ec69ff817983BFf17c710F34E0";
+export const BLAST_POINTS_ADDRESS = "0x364e71bB1D1B573bed7aa133329B92eE28983dF2";
+*/
 
 export const ERC20_ABI = [
   {
