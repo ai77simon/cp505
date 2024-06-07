@@ -238,10 +238,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // Open blind box
     function openBlindBox() external nonReentrant{
         // Open the blind box, generate the TeamCard based on the VRF
-        uint teamCardsCount = 0;
-        for (uint8 i=0; i<24; i++) {
-            teamCardsCount += _teamCardMap[msg.sender][i];
-        }
+        uint teamCardsCount = _getTeamCardCount(msg.sender);
         require(teamCardsCount > 0, "The number of pack must be greater than 0");
 
         uint bTokenAmount = bToken.balanceOf(msg.sender);        
@@ -369,8 +366,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // This function is called by the Entropy contract, Callback function to handle the generated random number
     function entropyCallback(uint64 sequenceNumber, address _providerAddress, bytes32 randomNumber) internal override{
-        require(msg.sender == provider, "Unauthorized Entropy callback");
-        require(_providerAddress == provider, "Invalid provider address");
+        // require(_providerAddress == provider, "Invalid provider address");
         CacheData memory cacheData = _randomGeneratorMap[sequenceNumber];
         require(cacheData.sender!=address(0) && cacheData.isGenerated==false, "No data available to process");
 
@@ -389,18 +385,27 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         emit GenerateResult(sequenceNumber, _providerAddress, randomNumber);
     }
 
+    function getTeamCardCount(address checkAddress) public view returns (uint) {
+        return _getTeamCardCount(checkAddress);
+    }
+
+    // return sum for _teamCardMap[checkAddress]
+    function _getTeamCardCount(address checkAddress) internal view returns (uint){
+        uint teamCardSum = 0;
+        for (uint i=0; i<24; i++) {
+            teamCardSum += _teamCardMap[checkAddress][i];
+        }
+        return teamCardSum;
+    }
+
     // Check if there are any unopened blind boxes that have obtained VRF
     function haveTeamCards() external view returns(bool){
         bool bolReturn = false;
         uint bTokenAmount = bToken.balanceOf(msg.sender);
+        uint teamCardsCount = _getTeamCardCount(msg.sender);
 
-        if (_teamCardMap[msg.sender].length == 0 || bTokenAmount == 0) {
+        if (teamCardsCount == 0 || bTokenAmount == 0) {
             return false;
-        }
-
-        uint teamCardsCount = 0;
-        for (uint i=0; i<24; i++) {
-            teamCardsCount += _teamCardMap[msg.sender][i];
         }
         
         if (teamCardsCount == bTokenAmount*5) {
