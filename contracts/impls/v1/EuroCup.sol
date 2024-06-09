@@ -309,8 +309,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint award = totalBonus * amount / totalSupply;
         stableCoin.transfer(msg.sender,award);
         totalBonus -= award;
-        for(uint i=amount-1;i>=0;i--){
-            uint tokenId = tToken.tokenOfOwnerByIndex(msg.sender,i);
+        for(uint i=amount;i>0;i--){
+            uint tokenId = tToken.tokenOfOwnerByIndex(msg.sender,i-1);
             tToken.burn(tokenId);
         }        
         emit GetBonus(msg.sender,award);
