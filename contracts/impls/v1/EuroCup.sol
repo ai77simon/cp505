@@ -370,11 +370,6 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         CacheData memory cacheData = _randomGeneratorMap[sequenceNumber];
         require(cacheData.sender!=address(0) && cacheData.isGenerated==false, "No data available to process");
 
-        if (_teamCardMap[cacheData.sender].length == 0) {
-            // Mapping does not exist, initialize it
-            _teamCardMap[cacheData.sender] = [uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)];
-        }
-
         for (uint i = 0; i < 5 * cacheData.amount; i++) {
             uint extraRandom = uint(keccak256(abi.encodePacked(block.timestamp, i)));
             uint randomTeam = uint(keccak256(abi.encodePacked(extraRandom, randomNumber))) % 24;
