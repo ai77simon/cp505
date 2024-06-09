@@ -184,7 +184,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // Buy blind box
     function buyBlindBox(uint amount,bytes32 referralCode,bytes32 userRandomNumber) external payable nonReentrant onlyWhileSale{
         // Limit the amount value
-        require(amount > 0 && amount < 100, "Amount must be between 1 and 99"); 
+        require(amount > 0 && amount <= 30, "Amount must be between 1 and 30"); 
         // starting price is 30 USDB
         uint price = 30;
         // For every 5000 blind boxes sold, the price increases by 2 USDB
@@ -206,7 +206,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // Asynchronous call to get VRF
     function callVRF(uint amount,bytes32 userRandomNumber) internal{
         // Limit the amount value
-        require(amount > 0 && amount < 100, "Amount must be between 1 and 99");
+        require(amount > 0 && amount <= 30, "Amount must be between 1 and 30");
         uint128 requestFee = entropy.getFee(provider);
         if (msg.value < requestFee) revert("not enough fees");
         uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, userRandomNumber);
@@ -309,7 +309,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
         uint award = totalBonus * amount / totalSupply;
         stableCoin.transfer(msg.sender,award);
         totalBonus -= award;
-        for(uint i=0;i<amount;i++){
+        for(uint i=amount-1;i>=0;i--){
             uint tokenId = tToken.tokenOfOwnerByIndex(msg.sender,i);
             tToken.burn(tokenId);
         }        
