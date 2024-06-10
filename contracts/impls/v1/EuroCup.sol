@@ -196,8 +196,9 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
             // Valid referral code owners will receive a 10% commission rebate
             stableCoin.transfer(referralPersonAddress,amount * price * 1e18 / 10);
         }
-        bToken.mint(msg.sender,amount);
         totalSaleBlindBox += amount;
+        bToken.mint(msg.sender,amount);
+        
         // Asynchronous call to get VRF, Confirming the VRF also confirms the team attributes in the blind box
         callVRF(amount,userRandomNumber);
         emit Buy(msg.sender,amount,price);
@@ -205,11 +206,14 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // Asynchronous call to get VRF
     function callVRF(uint amount,bytes32 userRandomNumber) internal{
+        // Combine userRandomNumber with internal unpredictable factors
+        bytes32 combinedRandomNumber = keccak256(abi.encodePacked(userRandomNumber, block.timestamp, msg.sender));
+        
         // Limit the amount value
         require(amount > 0 && amount <= 30, "Amount must be between 1 and 30");
         uint128 requestFee = entropy.getFee(provider);
-        if (msg.value < requestFee) revert("not enough fees");
-        uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, userRandomNumber);
+        require(msg.value >= requestFee, "not enough fees");
+        uint64 sequenceNumber = entropy.requestWithCallback{ value: requestFee }(provider, combinedRandomNumber);
         require(sequenceNumber > 0, "Invalid sequence number");
         _randomGeneratorMap[sequenceNumber] = CacheData(msg.sender,amount,false,block.timestamp);
         emit VRFGenerated(msg.sender, sequenceNumber);
@@ -228,7 +232,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
         bytes32 newUserRandomNumber = keccak256(abi.encodePacked(sequenceNumber, block.timestamp, user));
         uint64 newSequenceNumber = entropy.requestWithCallback{ value: entropy.getFee(provider) }(provider, newUserRandomNumber);
-        require(sequenceNumber > 0, "Invalid sequence number");
+        require(sequenceNumber > 0, "Invalid new sequence number");
         _randomGeneratorMap[newSequenceNumber] = CacheData(user, amount, false, block.timestamp);
 
         emit VRFTimeoutHandled(user, sequenceNumber, newSequenceNumber);
@@ -239,10 +243,11 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     function openBlindBox() external nonReentrant{
         // Open the blind box, generate the TeamCard based on the VRF
         uint teamCardsCount = _getTeamCardCount(msg.sender);
-        require(teamCardsCount > 0, "The number of pack must be greater than 0");
+        require(teamCardsCount > 0, "The number of VRF must be greater than 0");
 
-        uint bTokenAmount = bToken.balanceOf(msg.sender);        
-        require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
+        uint bTokenAmount = bToken.balanceOf(msg.sender);
+        require(bTokenAmount > 0, "The number of pack must be greater than 0");        
+        // require(teamCardsCount == bTokenAmount*5, "The packs have not all been generated yet");
         
         // The maximum number of TeamCardNFT that can be generated at one time
         uint maxGeneTCardNumber = maxOpenBlindBoxNumber * 5;
@@ -256,6 +261,7 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
             }
         }
 
+        // If all cards are minted, clear the mapping
         if (teamCardsCount <= maxGeneTCardNumber) {
             delete _teamCardMap[msg.sender];
         }
@@ -267,7 +273,8 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // Synthetic blind boxes
     function synthetic(uint amount,bytes32 userRandomNumber) external payable nonReentrant onlyWhilePlaying{
-        require(block.number > playStartBlock, "the PlayStartBlock must larger than block.num");
+        require(amount > 0, "Amount must be greater than 0");
+        require(block.number > playStartBlock, "Current block number must be greater than playStartBlock");
         // Synthetic blind boxes, merging one blind box requires an additional 60 UEFA per hour
         uint price = 50000 + (block.number - playStartBlock) / 1800 * 60 ;
         vToken.burn(msg.sender,amount * price * 1e18);
@@ -298,21 +305,31 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // The owner of the champion team's CARD will receive 90% of the prize pool, and the administrator will receive 10% of the prize pool
     function getBonus() external nonReentrant onlyWhilePlayFinished{
         require(winner != 100,"not set winner");
+
+        // Initialize totalBonus and totalCommission once
         if(!frozenBonusFlag){
-            totalBonus = stableCoin.balanceOf(address(this)) * 9 / 10;
-            totalCommission = stableCoin.balanceOf(address(this)) * 1 / 10;
+            uint totalBalance = stableCoin.balanceOf(address(this));
+            totalBonus = totalBalance * 9 / 10;
+            totalCommission = totalBalance * 1 / 10;
             frozenBonusFlag = true;
         }
+
         uint amount = tToken.getOwnerTeamCount(msg.sender,winner);
         require(amount > 0,"amount must greater than zero");
+
         uint totalSupply = tToken.getTeamCount(winner);
-        uint award = totalBonus * amount / totalSupply;
-        stableCoin.transfer(msg.sender,award);
+
+        uint maxDealAmount = 100;
+        uint nowDealAmount = amount > maxDealAmount ? maxDealAmount : amount;
+
+        uint award = totalBonus * nowDealAmount / totalSupply;
         totalBonus -= award;
-        for(uint i=amount;i>0;i--){
-            uint tokenId = tToken.tokenOfOwnerByIndex(msg.sender,i-1);
-            tToken.burn(tokenId);
-        }        
+        stableCoin.transfer(msg.sender,award);
+
+        uint[] memory tokenIds = tToken.getOwnerTeamTokenIds(msg.sender, winner);
+        for (uint i = 0; i < nowDealAmount; i++) {
+            tToken.burn(tokenIds[i]);
+        }
         emit GetBonus(msg.sender,award);
     }
 
@@ -336,8 +353,9 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
     // The management account advances the final prize
     function getCommission() external nonReentrant onlyWhilePlayFinished onlyRole(GOVERNOR_ROLE){
         if(!frozenBonusFlag){
-            totalBonus = stableCoin.balanceOf(address(this)) * 9 / 10;
-            totalCommission = stableCoin.balanceOf(address(this)) * 1 / 10;
+            uint totalBalance = stableCoin.balanceOf(address(this));
+            totalBonus = totalBalance * 9 / 10;
+            totalCommission = totalBalance * 1 / 10;
             frozenBonusFlag = true;
         }
         if(!frozenCommissionFlag){            
@@ -395,16 +413,12 @@ contract EuroCup is Initializable,AccessControlEnumerableUpgradeable,ReentrancyG
 
     // Check if there are any unopened blind boxes that have obtained VRF
     function haveTeamCards() external view returns(bool){
-        bool bolReturn = false;
+        bool bolReturn = true;
         uint bTokenAmount = bToken.balanceOf(msg.sender);
         uint teamCardsCount = _getTeamCardCount(msg.sender);
 
         if (teamCardsCount == 0 || bTokenAmount == 0) {
-            return false;
-        }
-        
-        if (teamCardsCount == bTokenAmount*5) {
-            bolReturn = true;
+            bolReturn = false;
         }
         return bolReturn;
     }
